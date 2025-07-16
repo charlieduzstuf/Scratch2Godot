@@ -75,11 +75,41 @@ def convert_key(scratch_key):
     return "Key.UNKNOWN"
 
     
-    
+def normalize_to_latin_godot_style(text: str) -> str:
+    # Deutsche Sonderzeichen
+    replacements = {
+        'Ä': 'AE', 'ä': 'ae',
+        'Ö': 'OE', 'ö': 'oe',
+        'Ü': 'UE', 'ü': 'ue',
+        'ß': 'ss'
+    }
+
+    for original, replacement in replacements.items():
+        text = text.replace(original, replacement)
+
+    # Manuell definierte diakritische Zeichen
+    basic_replacements = {
+        'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e',
+        'á': 'a', 'à': 'a', 'â': 'a',
+        'ú': 'u', 'ù': 'u', 'û': 'u',
+        'í': 'i', 'ì': 'i', 'î': 'i', 'ï': 'i',
+        'ó': 'o', 'ò': 'o', 'ô': 'o',
+        'ñ': 'n', 'ç': 'c'
+    }
+
+    for original, replacement in basic_replacements.items():
+        text = text.replace(original, replacement)
+
+    # Zeichenweise umwandeln
+    result = ""
+    for c in text:
+        if c.isascii() and c.isalnum():
+            result += c
+        else:
+            result += f"_U{ord(c)}_"
+
+    return result
+
     
 if __name__ == "__main__":
-    # Test the function
-    print(convert_key("space"))  # Output: KEY_SPACE
-    print(convert_key("a"))      # Output: KEY_A
-    print(convert_key("1"))      # Output: KEY_1
-    print(convert_key("unknown")) # Output: KEY_UNKNOWN
+   print(normalize_to_latin_godot_style("Birne & Äpfel – 北京 😊"))

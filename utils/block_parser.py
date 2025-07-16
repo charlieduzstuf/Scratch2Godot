@@ -291,7 +291,7 @@ def convert_blocks(blocks: dict, block: dict, code: str, name: str, spaces: int)
                         code += spaces + f'if str(costume).is_valid_int():\n'
                         code += spaces + f'\tanimation.play(animation.sprite_frames.get_animation_names()[int(costume) % animation.sprite_frames.get_animation_names().size()])\n'
                         code += spaces + f'elif costume in animation.sprite_frames.get_animation_names():\n'
-                        code += spaces + f'\tanimation.play(str(costume))\n'
+                        code += spaces + f'\tanimation.play(main.normalize_to_latin(str(costume)))\n'
                         code += spaces + f'$"../..".get_node("Area2D/Collision-" + animation.animation).disabled = false\n'
                     case "looks_nextcostume":
                         code += "\n" + spaces + f'$"../..".get_node("Area2D/Collision-" + animation.animation).disabled = true\n'
@@ -303,9 +303,9 @@ def convert_blocks(blocks: dict, block: dict, code: str, name: str, spaces: int)
                         code += spaces + f'if str(costume).is_valid_int():\n'
                         code += spaces + f'\tmain.play(main.sprite_frames.get_animation_names()[int(costume) % main.sprite_frames.get_animation_names().size()])\n'
                         code += spaces + f'elif costume in main.sprite_frames.get_animation_names():\n'
-                        code += spaces + f'\tmain.play(str(costume))\n'
+                        code += spaces + f'\tmain.play(main.normalize_to_latin(str(costume)))\n'
                     case "looks_nextbackdrop":
-                        code += spaces + f'main.play(main.sprite_frames.get_animation_names()[((main.sprite_frames.get_animation_names().find(main.get_tree()) + 1) % main.sprite_frames.get_animation_names().size())])\n'
+                        code += spaces + f'main.play(main.sprite_frames.get_animation_names()[((main.sprite_frames.get_animation_names().find(main.animation) + 1) % main.sprite_frames.get_animation_names().size())])\n'
                     case "looks_setStretch":
                         var["stretch_x"] = "0"
                         var["stretch_y"] = "0"
@@ -386,7 +386,7 @@ def convert_blocks(blocks: dict, block: dict, code: str, name: str, spaces: int)
                                 code += spaces + 'mat.set_shader_parameter("saturation", mat.get_shader_parameter("saturation") + effect)\n'
                             case "OPAQUE":
                                 code += spaces + 'mat.set_shader_parameter("opaque ", mat.get_shader_parameter("opaque") + effect)\n'
-                    case "looks_seteffect":
+                    case "looks_seteffectto":
                         var["effect"] = '0'
                         code += "\n" + spaces + 'effect = correctur.ms('+ str(repeat_content(blocks, block, "VALUE")) + f', "float", "res://scripts/{name}.gd", "change effect [-----] by (!)")\n'
                         match block["fields"]["EFFECT"][0]:
@@ -797,11 +797,11 @@ def create_gd_script(blocks: dict, block_opcode: str, path: str, name: str, spri
             header += f'var my_broadcast = "{current_block["fields"]["BROADCAST_OPTION"][0]}"\n'
             header += 'var new_broadcast = false\n'
             main += '\tcurrent_broadcast = main.broadcast\n'
-            main += 'func _process(_delta) -> void:\n\tif main.broadcast != current_broadcast:\n\t\tcurrent_broadcast = main.broadcast\n\t\tnew_broadcast = true\n\t\tmain.broadcastlist[my_broadcast] += 1'
+            main += 'func _process(_delta) -> void:\n\tif main.broadcast != current_broadcast:\n\t\tcurrent_broadcast = main.broadcast\n\t\tnew_broadcast = true\n\t\tmain.broadcastlist[my_broadcast] += 1\n'
             main += '\tif new_broadcast and main.broadcast == my_broadcast:\n\t\tnew_broadcast = false\n\t\tawait get_tree().process_frame\n\t\tmain.broadcast = ""\n'
             content = convert_blocks(blocks, blocks[current_block["next"]], main, name, 2)
-            content += "\n\t\tmain.broadcastlist[my_broadcast] -= 1"
-    open(f"{path}{name}.gd", "w").write(header + content)
+            content += "\n\t\tmain.broadcastlist[my_broadcast] -= 1\n"
+    open(f"{path}{name}.gd", "w", encoding="utf-8").write(header + content)
     return new
 def main_gd(variables, x, y, visible, size, direction, rotationStyle):
     code = f'''extends Node2D\n@export_group("Properties")\n@export_range(-179, 180) var direction: float = {direction - 90}\n@export var stretch = Vector2i(100, 100)\n@export var size = 100\nvar size_x = {-1 if rotationStyle == "left-right" and direction < 0 else 1}\n@export_enum("all around", "left-right", "don't rotate") var rotation_type: String = "{rotationStyle}"\n@export_group("Variables")\n'''
@@ -809,7 +809,8 @@ def main_gd(variables, x, y, visible, size, direction, rotationStyle):
         code += f'''var {convert_string(name[0])} = {name[1]}'''
     code += (
             'func _on_ready() -> void:\n'
-            '\tanimation.scale = Vector2(size / 100 * size_x * strech.x / 100, size / 100 * strech.y / 100)\n'
+            '\tvar animation = $Sprite\n'
+            '\tanimation.scale = Vector2(size / 100 * size_x * stretch.x / 100, size / 100 * stretch.y / 100)\n'
             '\tanimation.rotation = deg_to_rad(direction - 90)\n\n'
             #touching mouse
             'func is_mouse_over_hitbox() -> bool:\n'
@@ -844,14 +845,61 @@ def main_gd(variables, x, y, visible, size, direction, rotationStyle):
             '\t\tif hit.get("collider") == other_area:\n'
             '\t\t\treturn true\n'
             '\treturn false\n'
+
+            #stopp script ('stop this script' - block)
+            'func stop(node: Node, script_path: String) -> void:\n'
+            '\tnode.set_script(null)\n'
+            '\tawait get_tree().process_frame\n'
+            '\tnode.set_script(load(script_path))\n'
         )
     return code
 
-def background_gd():
+def background_gd(path: str, sprite):
+    broadcasts = "{"
+    print(sprite["broadcasts"])
+    for bred, cast in sprite["broadcasts"].items(): #hehe bred :)
+        broadcasts += '"' + cast + '":0,\n'
+    broadcasts += "}"
     code = (
-        ''
+        'extends AnimatedSprite2D\n'
+        '\n'
+        'var broadcast := ""\n'
+        f'var broadcastlist := {broadcasts}\n'
+        '\n'
+        'func normalize_to_latin(text: String) -> String:\n'
+        '\tvar replacements = {\n'
+        '\t\t"Ä": "AE", "ä": "ae",\n'
+        '\t\t"Ö": "OE", "ö": "oe",\n'
+        '\t\t"Ü": "UE", "ü": "ue",\n'
+        '\t\t"ß": "ss"\n'
+        '\t}\n'
+        '\n'
+        '\tfor original in replacements.keys():\n'
+        '\t\ttext = text.replace(original, replacements[original])\n'
+        '\n'
+        '\tvar basic_replacements = {\n'
+        '\t\t"é": "e", "è": "e", "ê": "e", "ë": "e",\n'
+        '\t\t"á": "a", "à": "a", "â": "a", "ä": "ae",\n'
+        '\t\t"ú": "u", "ù": "u", "û": "u", "ü": "ue",\n'
+        '\t\t"í": "i", "ì": "i", "î": "i", "ï": "i",\n'
+        '\t\t"ó": "o", "ò": "o", "ô": "o", "ö": "oe",\n'
+        '\t\t"ñ": "n", "ç": "c"\n'
+        '\t}\n'
+        '\tfor original in replacements.keys():\n'
+        '\t\ttext = text.replace(original, replacements[original])\n'
+        '\tfor original in basic_replacements.keys():\n'
+        '\t\ttext = text.replace(original, basic_replacements[original])\n'
+        '\tvar result := ""\n'
+        '\tfor i in text.length():\n'
+        '\t\tvar c := text.substr(i, 1)\n'
+        '\t\tvar code := c.unicode_at(0)\n'
+        '\t\tif (code >= 48 and code <= 57) or (code >= 65 and code <= 90) or (code >= 97 and code <= 122):\n'
+        '\t\t\tresult += c\n'
+        '\t\telse:\n'
+        '\t\t\tresult += "_U%d_" % code\n'
+        '\treturn result'
     )
-
+    open(f"{path}scripts/BACKGROUND.gd", "w", encoding="utf-8").write(code)
 
 def convert_string(input_str):
     result = []

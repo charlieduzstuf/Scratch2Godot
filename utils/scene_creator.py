@@ -2,7 +2,8 @@ import random, string, os, shutil, math
 from unidecode import unidecode
 from types import SimpleNamespace
 from utils.block_parser import create_gd_script, main_gd, background_gd
-from utils.file_handling import jpg_to_png, svg_to_png, resize_png_half,collision_shape2d, import_file
+from utils.file_handling import jpg_to_png, svg_to_png, resize_png_half, collision_shape2d, import_file
+from utils.helpers import normalize_to_latin_godot_style
 
 
 FONT_MAPPING = {
@@ -25,10 +26,10 @@ def create_main_tscn(json_file: dict, temp_dir: str, settings, zip_file: dict) -
     '''
     #create project.godot. The file you have to chose to open the project in godot
     config = f"""config_version=5\n\n[application]\n\nconfig/name="{settings["project_name"]}"\nconfig/description="{settings["project_description"]}"\nconfig/version="{settings["project_version"]}"\nrun/main_scene="res://main.tscn"\nconfig/features=PackedStringArray("4.3", "Mobile")\nrun/max_fps={settings["fps"]}\nconfig/icon="res://icon.svg"\n[display]\n\nwindow/size/viewport_width=480\nwindow/size/viewport_height=360\nwindow/stretch/mode="canvas_items"\n\n[rendering]\n\nrenderer/rendering_method="mobile" """
-    open(f'{temp_dir}/Godotgame/project.godot', "w").write(config)
+    open(f'{temp_dir}/Godotgame/project.godot', "w", encoding="utf-8").write(config)
     main_scene = SimpleNamespace()
     main_scene.load_steps = f'[gd_scene load_steps={len(json_file["targets"])*3} format=3 uid="uid://{"".join(random.choices(string.digits + string.ascii_lowercase, k=13))}"]\n'
-    main_scene.resource = '\n[ext_resource type="Shader" path="res://assets/effects.gdshader" id="1_mjccp"]\n[ext_resource type="SpriteFrames" uid="uid://-Stage" path="res://costumes/Animation-Stage.tres" id="id-frame-Stage"]\nf"""\n[ext_resource type="Script" path="res://scripts/BACKGROUND.gd" id="id_Background-script"]"""'
+    main_scene.resource = '\n[ext_resource type="Shader" path="res://assets/effects.gdshader" id="1_mjccp"]\n[ext_resource type="SpriteFrames" uid="uid://-Stage" path="res://costumes/Animation-Stage.tres" id="id-frame-Stage"]\n\n[ext_resource type="Script" path="res://scripts/BACKGROUND.gd" id="id_Background-script"]\n'
     main_scene.scripts = ""
     main_scene.standart = ('\n\n[sub_resource type="ShaderMaterial" id="ShaderMaterial_rg8s7"]\n'
                         'shader = ExtResource("1_mjccp")\n'
@@ -52,10 +53,9 @@ def create_main_tscn(json_file: dict, temp_dir: str, settings, zip_file: dict) -
     for sprite in json_file["targets"]:
         sprite["name"] = unidecode(str(sprite["name"])).encode('utf-8').decode('utf-8')
         if sprite["isStage"]:
-            print("TRue")
             main_scene.background = f'\n\n[node name="Background" type="AnimatedSprite2D"]\nz_index = -4096\nsprite_frames = ExtResource("id-frame-Stage")\nanimation = &"{sprite["costumes"][sprite["currentCostume"]]["name"]}"\nscript = ExtResource("id_Background-script")\nmaterial = SubResource("ShaderMaterial_rg8s7")\n\n'
             main_scene.background += f'\n[node name="Camera2D" type="Camera2D" parent="."]\nposition = Vector2(0, 0)\n'
-            background_gd()
+            background_gd(f"{temp_dir}/Godotgame/", sprite)
             costume = SimpleNamespace()
             animation = SimpleNamespace()
             animation.start = f'[gd_resource type="SpriteFrames" load_steps={len(sprite["costumes"])} format=3 uid="uid://frames-Stage"]'
@@ -65,14 +65,14 @@ def create_main_tscn(json_file: dict, temp_dir: str, settings, zip_file: dict) -
                 costume.name = costumes["md5ext"]
                 if (costume.name).lower().endswith("png"):
                     zip_file.extract(costume.name, f'{temp_dir}/Godotgame/')
-                    open(f"{temp_dir}/Godotgame/{costume.name}.import", "w").write(import_file(costume.name, costume.name[:-4]))
+                    open(f"{temp_dir}/Godotgame/{costume.name}.import", "w", encoding="utf-8").write(import_file(costume.name, costume.name[:-4]))
                 elif (costume.name).lower().endswith("jpg"):
                     jpg_to_png(zip_file.extract(costume.name, f'{temp_dir}/Godotgame/'), f"{temp_dir}/Godotgame/{(costume.name).replace('.jpg', '.png')}")
                     os.remove(f'{temp_dir}/Godotgame/{costume.name}')
                     #update costume name
                     costume.name = (costume.name).replace('.jpg', '.png')
                     #save costume
-                    open(f"{temp_dir}/Godotgame/{costume.name}.import", "w").write(import_file((costume.name).replace('.jpg', '.png'), costume.name[:-4]))
+                    open(f"{temp_dir}/Godotgame/{costume.name}.import", "w", encoding="utf-8").write(import_file((costume.name).replace('.jpg', '.png'), costume.name[:-4]))
             
                 
                 elif (costume.name).lower().endswith('.svg'):
@@ -81,7 +81,7 @@ def create_main_tscn(json_file: dict, temp_dir: str, settings, zip_file: dict) -
                     #update costume name
                     costume.name = (costume.name).replace('.svg', '.png')
                     #save costume
-                    open(f"{temp_dir}/Godotgame/{costume.name}.import", "w").write(import_file((costume.name).replace('.svg', '.png'), costume.name[:-4]))
+                    open(f"{temp_dir}/Godotgame/{costume.name}.import", "w", encoding="utf-8").write(import_file((costume.name).replace('.svg', '.png'), costume.name[:-4]))
                 animation.ext += f'\n[ext_resource type="Texture2D" uid="uid://{costume.name[:-4]}" path="res://{costume.name}" id="id_{costume.name[:-4]}"]'
                 frames = f'"duration": 1.0,\n"texture": ExtResource("id_{costume.name[: -4]}")'
                 ani = f'],\n"loop": false,\n"name": &"{costumes["name"]}",\n"speed": 0.0'
@@ -89,7 +89,7 @@ def create_main_tscn(json_file: dict, temp_dir: str, settings, zip_file: dict) -
             animation.res = animation.res[: -2]
             animation.res += "]"
             final_animation = animation.start + "\n" + animation.ext + "\n\n" + animation.res
-            open(f'{temp_dir}/Godotgame/costumes/Animation-{sprite["name"]}.tres', "w").write(final_animation)
+            open(f'{temp_dir}/Godotgame/costumes/Animation-{sprite["name"]}.tres', "w", encoding="utf-8").write(final_animation)
             main_scene.nodes = f"""\n[node name="scripts" type="Node2D" parent="."]"""
             topLevels = []
             blocks = sprite["blocks"]
@@ -100,12 +100,12 @@ def create_main_tscn(json_file: dict, temp_dir: str, settings, zip_file: dict) -
                 main_scene.resource += f"""\n[ext_resource type="Script" path="res://scripts/{sprite["name"]}-{name}.gd" id="id_{sprite["name"]}-{name}"]"""
                 main_scene.nodes += f"""\n[node name="{name}" type="Node2D" parent="scripts"]"""
                 main_scene.nodes += f"""\nscript = ExtResource("id_{sprite["name"]}-{name}")"""
-                signals += create_gd_script(blocks, topLevel, f"{temp_dir}/Godotgame/scripts/", f"{sprite['name']}-{name}", "Sprite")
+                signals += create_gd_script(blocks, topLevel, f"{temp_dir}/Godotgame/scripts/", f"{sprite['name']}-{name}", "Background")
         else:
             create_Object_scene(sprite, temp_dir, zip_file)
             main_scene.resource += f'[ext_resource type="PackedScene" uid="uid://sprite-{sprite["name"]}" path="res://sprites/{sprite["name"]}.tscn" id="id-sprite-{sprite["name"]}"]\n'
             main_scene.nodes += f'\n[node name="{sprite["name"]}" parent="." instance=ExtResource("id-sprite-{sprite["name"]}")]\nposition = Vector2({sprite["x"]}, {sprite["y"] * -1})\n'
-    open(f'{temp_dir}/Godotgame/main.tscn', "w").write(main_scene.load_steps + main_scene.resource + main_scene.standart + main_scene.background + main_scene.nodes + signals)
+    open(f'{temp_dir}/Godotgame/main.tscn', "w", encoding="utf-8").write(main_scene.load_steps + main_scene.resource + main_scene.standart + main_scene.background + main_scene.nodes + signals)
     shutil.copy("resources/icon.svg", f'{temp_dir}/Godotgame/icon.svg')
     shutil.copy("resources/controll.gd", f'{temp_dir}/Godotgame/assets/controll.gd')
     shutil.copy("resources/correctures.gd", f'{temp_dir}/Godotgame/assets/correctures.gd')
@@ -164,7 +164,7 @@ def create_Object_scene(sprite_data: dict, temp_dir: str, zip_file) -> str:
         f'script = ExtResource("id_sprite-{sprite_data["name"]}")\n'
         f'[node name="Sprite" type="AnimatedSprite2D" parent="."]\n'
         f'sprite_frames = ExtResource("{sprite.spriteframe}")\n'
-        f'animation = &"{sprite_data["costumes"][sprite_data["currentCostume"]]["name"]}"\n'
+        f'animation = &"{normalize_to_latin_godot_style(sprite_data["costumes"][sprite_data["currentCostume"]]["name"])}"\n'
         f'material = SubResource("ShaderMaterial_{sprite_data["name"]}")\n'
         f'[node name="Area2D" type="Area2D" parent="Sprite"]'
     )
@@ -177,22 +177,22 @@ def create_Object_scene(sprite_data: dict, temp_dir: str, zip_file) -> str:
         if costume.name.lower().endswith("png"):
             png_path = f"{temp_dir}/Godotgame/{costume.name}"
             resize_png_half(zip_file.extract(costume.name, f'{temp_dir}/Godotgame/'), png_path)
-            open(f"{temp_dir}/Godotgame/{costume.name}.import", "w").write(import_file(costume.name, costume.name[:-4]))
+            open(f"{temp_dir}/Godotgame/{costume.name}.import", "w", encoding="utf-8").write(import_file(costume.name, costume.name[:-4]))
         elif costume.name.lower().endswith("jpg"):
             png_path = f"{temp_dir}/Godotgame/{costume.name.replace('.jpg', '.png')}"
             jpg_to_png(zip_file.extract(costume.name, f'{temp_dir}/Godotgame/'), png_path)
             os.remove(f'{temp_dir}/Godotgame/{costume.name}')
             costume.name = costume.name.replace('.jpg', '.png')
-            open(f"{temp_dir}/Godotgame/{costume.name}.import", "w").write(import_file(costume.name, costume.name[:-4]))
+            open(f"{temp_dir}/Godotgame/{costume.name}.import", "w", encoding="utf-8").write(import_file(costume.name, costume.name[:-4]))
         elif costume.name.lower().endswith("svg"):
             png_path = f"{temp_dir}/Godotgame/{costume.name.replace('.svg', '.png')}"
             svg_to_png(zip_file.extract(costume.name, f'{temp_dir}/Godotgame/'), png_path, FONT_MAPPING)
             os.remove(f'{temp_dir}/Godotgame/{costume.name}')
             costume.name = costume.name.replace('.svg', '.png')
-            open(f"{temp_dir}/Godotgame/{costume.name}.import", "w").write(import_file(costume.name, costume.name[:-4]))
+            open(f"{temp_dir}/Godotgame/{costume.name}.import", "w", encoding="utf-8").write(import_file(costume.name, costume.name[:-4]))
 
         # Add collision shape
-        sprite.nodes += f'\n[node name="Collision-{costume_data["name"]}" type="CollisionPolygon2D" parent="Sprite/Area2D"]'
+        sprite.nodes += f'\n[node name="Collision-{normalize_to_latin_godot_style(costume_data["name"])}" type="CollisionPolygon2D" parent="Sprite/Area2D"]'
         costume.collision = collision_shape2d(f"{temp_dir}/Godotgame/{costume.name}")
         sprite.nodes += f'\npolygon = {costume.collision}'
         if sprite_data["costumes"][sprite_data["currentCostume"]] != costume_data:
@@ -205,7 +205,7 @@ def create_Object_scene(sprite_data: dict, temp_dir: str, zip_file) -> str:
             '{\n"frames": [{\n'
             f'"duration": 1.0,\n"texture": ExtResource("id_{costume.name[:-4]}")\n'
             '}],\n'
-            f'"loop": false,\n"name": &"{costume_data["name"]}",\n"speed": 0.0\n'
+            f'"loop": false,\n"name": &"{normalize_to_latin_godot_style(costume_data["name"])}",\n"speed": 0.0\n'
             '}, '
         )
     # Add bubble and scripts
@@ -216,7 +216,7 @@ def create_Object_scene(sprite_data: dict, temp_dir: str, zip_file) -> str:
     sprite.nodes += '\n[node name="scripts" type="Node2D" parent="Sprite"]'
 
     # Generate main script
-    open(f'{temp_dir}/Godotgame/scripts/sprite-{sprite_data["name"]}.gd', "w").write(main_gd(sprite_data["variables"], sprite_data["x"], sprite_data["y"], sprite_data["visible"], sprite_data["size"], sprite_data["direction"], sprite_data["rotationStyle"]))
+    open(f'{temp_dir}/Godotgame/scripts/sprite-{sprite_data["name"]}.gd', "w", encoding="utf-8").write(main_gd(sprite_data["variables"], sprite_data["x"], sprite_data["y"], sprite_data["visible"], sprite_data["size"], sprite_data["direction"], sprite_data["rotationStyle"]))
 
     # Process top-level blocks
     top_levels = [opcode for opcode, block in sprite_data["blocks"].items() if block["topLevel"] and not block["shadow"] and block["next"]]
@@ -231,6 +231,6 @@ def create_Object_scene(sprite_data: dict, temp_dir: str, zip_file) -> str:
     animation.res = animation.res.rstrip(", ") + "]"
     final_scene = sprite.load_steps + sprite.resource + "\n" + sprite.nodes + signals
     final_animation = animation.start + "\n" + animation.ext + "\n\n" + animation.res
-    open(f'{temp_dir}/Godotgame/sprites/{sprite_data["name"]}.tscn', "w").write(final_scene)
-    open(f'{temp_dir}/Godotgame/costumes/Animation-{sprite_data["name"]}.tres', "w").write(final_animation)
+    open(f'{temp_dir}/Godotgame/sprites/{sprite_data["name"]}.tscn', "w", encoding="utf-8").write(final_scene)
+    open(f'{temp_dir}/Godotgame/costumes/Animation-{sprite_data["name"]}.tres', "w", encoding="utf-8").write(final_animation)
     return

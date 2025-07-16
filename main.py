@@ -31,9 +31,8 @@ def Convert_game(sb3_file: str, settings: dict) -> str:
             with zip_file.open("project.json") as json_file:
                 json_file = json.load(json_file)
                 #create main_scene
-                create_main_tscn(json_file, temp_dir, settings, zip_file)
                 try:
-                    print("")
+                    create_main_tscn(json_file, temp_dir, settings, zip_file)
                 except Exception as error:
                     print(f"error by converting game: {error}")
         return(temp_dir)
@@ -44,5 +43,24 @@ def Convert_game(sb3_file: str, settings: dict) -> str:
     except json.JSONDecodeError:
         print("Invalid JSON in project.json")
 
-#Convert_game("temp/Fish.sb3", settings)
-Convert_game("temp/ScratchProject.sb3", settings)
+def Convert_game2(sb3_file: str, settings: dict) -> str:
+    """
+    Converts a Scratch .sb3 project to a Godot-compatible format.
+    
+    Args:
+        sb3_file (str): Path to the .sb3 project file.
+        settings (dict): Project settings such as name, fps, etc.
+    
+    Returns:
+        str: Path to the generated temporary project folder.
+    """
+    temp_dir = f"temp/{uuid.uuid4().hex[:9]}"
+    create_folders(temp_dir)
+    with zipfile.ZipFile(sb3_file, 'r') as zip_file:
+        with zip_file.open("project.json") as json_file:
+            json_file = json.load(json_file)
+            #create main_scene
+            
+            create_main_tscn(json_file, temp_dir, settings, zip_file)
+    return(temp_dir)
+Convert_game2("temp/ScratchProject.sb3", settings)
